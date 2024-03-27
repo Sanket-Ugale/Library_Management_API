@@ -10,9 +10,9 @@ from django.contrib.auth import get_user_model
 from rest_framework.permissions import IsAuthenticated
 from rest_framework_simplejwt.authentication import JWTAuthentication
 from rest_framework_simplejwt.tokens import RefreshToken
+from rest_framework.pagination import PageNumberPagination
 
 User=get_user_model()
-
 
 class Login(APIView):
     def post(self, request):
@@ -29,7 +29,7 @@ class Login(APIView):
 class Logout(APIView):
     def post(self, request):
         try:
-            refresh_token = request.data["refresh"]
+            refresh_token = request.data.get("refresh")
             token = RefreshToken(refresh_token)
             token.blacklist()
             return Response({'message': 'Logout success'}, status=status.HTTP_200_OK)
@@ -50,22 +50,30 @@ class Register(APIView):
             return Response({'message': f'{e}'}, status=status.HTTP_400_BAD_REQUEST)
         except:
             return Response({'message': 'User already exists'}, status=status.HTTP_400_BAD_REQUEST)
-    
 
 class BookList(APIView):
     authentication_classes = [JWTAuthentication]
     permission_classes = [IsAuthenticated]
+
+    class StandardResultsSetPagination(PageNumberPagination):
+        page_size = 1
+        page_query_param = 'page'
+        page_size_query_param = 'page_size'
+        max_page_size = 100
+
     def get(self, request):
+        paginator = self.StandardResultsSetPagination()
         books = Book.objects.all()
-        serializer = BookSerializer(books, many=True)
-        return Response(serializer.data)
+        result_page = paginator.paginate_queryset(books, request)
+        serializer = BookSerializer(result_page, many=True)
+        return paginator.get_paginated_response(serializer.data)
 
     def post(self, request):
         serializer = BookSerializer(data=request.data)
         if serializer.is_valid():
             serializer.save()
             return Response(serializer.data, status=status.HTTP_201_CREATED)
-        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)  # Add parentheses here
     
 class BookDetail(APIView):
     authentication_classes = [JWTAuthentication]
